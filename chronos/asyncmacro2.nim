@@ -51,9 +51,11 @@ when defined(chronosStrictException):
             next.addCallback(identName)
       except CancelledError:
         retFutureSym.cancelAndSchedule()
+        retFutureSym = nil
       except CatchableError as exc:
         futureVarCompletions
         retFutureSym.fail(exc)
+        retFutureSym = nil
 
     identName(nil)
     {.pop.}
@@ -89,9 +91,11 @@ else:
             next.addCallback(identName)
       except CancelledError:
         retFutureSym.cancelAndSchedule()
+        retFutureSym = nil
       except CatchableError as exc:
         futureVarCompletions
         retFutureSym.fail(exc)
+        retFutureSym = nil
       except Exception as exc:
         # TODO remove Exception handler to turn on strict mode
         if exc of Defect:
@@ -99,6 +103,7 @@ else:
 
         futureVarCompletions
         retFutureSym.fail((ref ValueError)(msg: exc.msg, parent: exc))
+        retFutureSym = nil
 
     identName(nil)
     {.pop.}
