@@ -46,6 +46,7 @@ when defined(chronosStrictException):
               const msg = "Async procedure (&" & strName & ") yielded `nil`, " &
                           "are you await'ing a `nil` Future?"
               raiseAssert msg
+            retFutureSym = nil
           else:
             next.addCallback(identName)
       except CancelledError:
@@ -83,6 +84,7 @@ else:
               const msg = "Async procedure (&" & strName & ") yielded `nil`, " &
                           "are you await'ing a `nil` Future?"
               raiseAssert msg
+            retFutureSym = nil
           else:
             next.addCallback(identName)
       except CancelledError:
@@ -238,6 +240,15 @@ proc asyncSingleProc(prc: NimNode): NimNode {.compileTime.} =
     )
   )
 
+  # -> var retFutureCopy = retFuture
+  var retFutureSymCopy = ident "chronosInternalRetFutureCopy"
+  outerProcBody.add(
+    newVarStmt(
+      retFutureSymCopy,
+      retFutureSym
+    )
+  )
+
   # -> iterator nameIter(): FutureBase {.closure.} =
   # ->   {.push warning[resultshadowed]: off.}
   # ->   var result: T
@@ -333,8 +344,8 @@ proc asyncSingleProc(prc: NimNode): NimNode {.compileTime.} =
                          createFutureVarCompletions(futureVarIdents, nil))
     outerProcBody.add procCb
 
-    # -> return retFuture
-    outerProcBody.add newNimNode(nnkReturnStmt, prc.body[^1]).add(retFutureSym)
+    # -> return retFutureCopy
+    outerProcBody.add newNimNode(nnkReturnStmt, prc.body[^1]).add(retFutureSymCopy)
 
   if prc.kind != nnkLambda: # TODO: Nim bug?
     prc.addPragma(newColonExpr(ident "stackTrace", ident "off"))
