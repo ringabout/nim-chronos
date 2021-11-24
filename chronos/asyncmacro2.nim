@@ -399,7 +399,11 @@ template await*[T](f: Future[T]): untyped =
       raise newCancelledError()
     chronosInternalTmpFuture.internalCheckComplete()
     when T isnot void:
-      cast[type(f)](chronosInternalTmpFuture).internalRead()
+      let res = cast[type(f)](chronosInternalTmpFuture).internalRead()
+      chronosInternalTmpFuture = nil
+      res
+    else:
+      chronosInternalTmpFuture = nil
   else:
     unsupported "await is only available within {.async.}"
 
@@ -413,7 +417,12 @@ template awaitne*[T](f: Future[T]): Future[T] =
     chronosInternalRetFuture.child = nil
     if chronosInternalRetFuture.mustCancel:
       raise newCancelledError()
-    cast[type(f)](chronosInternalTmpFuture)
+    when T isnot void:
+      let res = cast[type(f)](chronosInternalTmpFuture).internalRead()
+      chronosInternalTmpFuture = nil
+      res
+    else:
+      chronosInternalTmpFuture = nil
   else:
     unsupported "awaitne is only available within {.async.}"
 
