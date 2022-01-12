@@ -28,6 +28,18 @@ when defined(chronosStackTrace):
   type StackTrace = string
 
 type
+  FutureError* = object of CatchableError
+
+  CancelledError* = object of FutureError
+
+
+template defaultExceptions: untyped =
+  when defined(chronosStrictException):
+    (CancelledError, CatchableError)
+  else:
+    (CancelledError, Exception)
+
+type
   FutureState* {.pure.} = enum
     Pending, Finished, Cancelled, Failed
 
@@ -64,7 +76,7 @@ type
   # eg FuturEx[void, (ValueError, OSError)]
   #FuturEx*[T, E] = Futuree[T]
 
-  Future*[T] = FuturEx[T, (CancelledError, Exception)]
+  Future*[T] = FuturEx[T, defaultExceptions]
 
   FutureStr*[T] = ref object of Future[T]
     ## Future to hold GC strings
@@ -76,10 +88,6 @@ type
 
   FutureDefect* = object of Defect
     cause*: FutureBase
-
-  FutureError* = object of CatchableError
-
-  CancelledError* = object of FutureError
 
   FutureList* = object
     head*: FutureBase
