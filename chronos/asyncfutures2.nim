@@ -53,7 +53,7 @@ type
   # the future can be stored within the caller's stack frame.
   # How much refactoring is needed to make this a regular non-ref type?
   # Obviously, it will still be allocated on the heap when necessary.
-  Future*[T] = ref object of FutureBase ## Typed future.
+  FuturEx*[T, E] = ref object of FutureBase ## Typed future.
     when defined(chronosStrictException):
       closure*: iterator(f: Future[T]): FutureBase {.raises: [Defect, CatchableError], gcsafe.}
     else:
@@ -62,7 +62,9 @@ type
 
   # Future with a tuple of possible exception types
   # eg FuturEx[void, (ValueError, OSError)]
-  FuturEx*[T, E] = Future[T]
+  #FuturEx*[T, E] = Futuree[T]
+
+  Future*[T] = FuturEx[T, (CancelledError, Exception)]
 
   FutureStr*[T] = ref object of Future[T]
     ## Future to hold GC strings
@@ -86,6 +88,8 @@ type
 
 var currentID* {.threadvar.}: uint
 currentID = 0'u
+
+template toFuture*[T, E](f: FuturEx[T, E]): Future[T] = cast[Future[T]](f)
 
 when defined(chronosFutureTracking):
   var futureList* {.threadvar.}: FutureList
@@ -113,6 +117,9 @@ template setupFutureBase(loc: ptr SrcLoc) =
 proc newFutureImpl[T](loc: ptr SrcLoc): Future[T] =
   setupFutureBase(loc)
 
+proc newFuturExImpl[T, E](loc: ptr SrcLoc): FuturEx[T, E] =
+  setupFutureBase(loc)
+
 proc newFutureSeqImpl[A, B](loc: ptr SrcLoc): FutureSeq[A, B] =
   setupFutureBase(loc)
 
@@ -125,6 +132,13 @@ template newFuture*[T](fromProc: static[string] = ""): Future[T] =
   ## Specifying ``fromProc``, which is a string specifying the name of the proc
   ## that this future belongs to, is a good habit as it helps with debugging.
   newFutureImpl[T](getSrcLocation(fromProc))
+
+template newFuturEx*[T, E](fromProc: static[string] = ""): FuturEx[T, E] =
+  ## Creates a new future.
+  ##
+  ## Specifying ``fromProc``, which is a string specifying the name of the proc
+  ## that this future belongs to, is a good habit as it helps with debugging.
+  newFuturExImpl[T, E](getSrcLocation(fromProc))
 
 template newFutureSeq*[A, B](fromProc: static[string] = ""): FutureSeq[A, B] =
   ## Create a new future which can hold/preserve GC sequence until future will
@@ -253,7 +267,7 @@ proc fail[T](future: Future[T], error: ref CatchableError, loc: ptr SrcLoc) =
 
 template fail*[T](future: Future[T], error: ref CatchableError) =
   ## Completes ``future`` with ``error``.
-  fail(future, error, getSrcLocation())
+  fail[T](future, error, getSrcLocation())
 
 template newCancelledError(): ref CancelledError =
   (ref CancelledError)(msg: "Future operation cancelled!")
@@ -573,6 +587,8 @@ proc asyncSpawn*(future: Future[void]) =
     future.addCallback(cb)
   else:
     cb(nil)
+
+proc asyncSpawn*[E](futurex: FuturEx[void, E]) = asyncSpawn(toFuture(futurex))
 
 proc asyncCheck*[T](future: Future[T]) {.
     deprecated: "Raises Defect on future failure, fix your code and use" &

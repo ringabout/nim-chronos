@@ -221,8 +221,8 @@ proc asyncSingleProc(prc: NimNode): NimNode {.compileTime.} =
     outerProcBody.add(
       newVarStmt(
         retFutureSym,
-        newCall(newTree(nnkBracketExpr, ident "newFuture", subRetType),
-                newLit(prcName))
+        newCall(newTree(nnkBracketExpr, ident "newFuturEx", subRetType, possibleExceptionsTuple),
+          newLit(prcName))
       )
     )
  
@@ -230,12 +230,13 @@ proc asyncSingleProc(prc: NimNode): NimNode {.compileTime.} =
     outerProcBody.add(
        newAssignment(
         newDotExpr(retFutureSym, newIdentNode("closure")),
-        iteratorNameSym)
+        iteratorNameSym
+       )
     )
 
     # -> futureContinue(resultFuture))
     outerProcBody.add(
-        newCall(newIdentNode("futureContinue"), retFutureSym)
+        newCall(newIdentNode("futureContinue"), newCall(newIdentNode("toFuture"), retFutureSym))
     )
 
     # -> return resultFuture
@@ -304,7 +305,7 @@ macro checkFutureExceptions(f: typed): untyped =
     quote do: raiseAssert("Unhandled future exception: " & `f`.error.msg)
   )
 
-template await*[T](f: Future[T]): untyped =
+template await*[T, E](f: FuturEx[T, E] | Future[T]): untyped =
   when declared(chronosInternalRetFuture):
     let chronosInternalTmpFuture = f
     chronosInternalRetFuture.child = chronosInternalTmpFuture
@@ -326,7 +327,7 @@ template await*[T](f: Future[T]): untyped =
       raise newCancelledError()
     checkFutureExceptions(chronosInternalTmpFuture)
     when T isnot void:
-      cast[type(f)](chronosInternalTmpFuture).internalRead()
+      toFuture(cast[type(f)](chronosInternalTmpFuture)).internalRead()
   else:
     unsupported "await is only available within {.async.}"
 
