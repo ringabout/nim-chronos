@@ -984,6 +984,35 @@ suite "Future[T] behavior test suite":
   test "Cancellation race test":
     check: waitFor(testCancellationRaceAsync())
 
+  test "Cancellation race test 2":
+    proc secondTest() {.async.} =
+      var someFut = newFuture[void]()
+
+      proc raceProc(): Future[int] {.async.} =
+        await someFut
+        return 12
+
+      var raceFut1 = raceProc()
+      someFut.complete()
+      await cancelAndWait(raceFut1)
+      check:
+        # Cancellation is swallowed, because we
+        # would loose the return value
+        raceFut1.finished()
+
+      proc raceProc2(): Future[int] {.async.} =
+        result = await raceProc()
+        await sleepAsync(10.milliseconds)
+
+      someFut = newFuture[void]()
+      var raceFut2 = raceProc2()
+      someFut.complete()
+      await cancelAndWait(raceFut2)
+      check:
+        raceFut2.cancelled()
+
+    waitFor(secondTest())
+
   proc testAsyncSpawnAsync(): Future[bool] {.async.} =
 
     proc completeTask1() {.async.} =

@@ -257,6 +257,13 @@ template await*[T](f: Future[T]): untyped =
       chronosInternalTmpFuture = f
     chronosInternalRetFuture.child = chronosInternalTmpFuture
 
+    # `await` can't cancel safely because we would loose data
+    # instead, pass the cancellation down the chain
+    if chronosInternalRetFuture.mustCancel:
+      chronosInternalTmpFuture.cancelAndSchedule(getSrcLocation())
+      chronosInternalTmpFuture.mustCancel = true
+      chronosInternalRetFuture.mustCancel = false
+
     # This "yield" is meant for a closure iterator in the caller.
     yield chronosInternalTmpFuture
 
@@ -270,9 +277,14 @@ template await*[T](f: Future[T]): untyped =
     # environment. That's where control actually gets back to us.
 
     chronosInternalRetFuture.child = nil
-    if chronosInternalRetFuture.mustCancel:
-      raise newCancelledError()
     chronosInternalTmpFuture.internalCheckComplete()
+
+    if chronosInternalTmpFuture.cancelled():
+      raise newCancelledError()
+
+    if chronosInternalTmpFuture.mustCancel:
+      chronosInternalRetFuture.mustCancel = true
+
     when T isnot void:
       cast[type(f)](chronosInternalTmpFuture).internalRead()
   else:
