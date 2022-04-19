@@ -13,11 +13,11 @@ when (NimMajor, NimMinor) < (1, 4):
 else:
   {.push raises: [].}
 
-import std/[os, tables, strutils, heapqueue, lists, options, nativesockets, net,
+import std/[tables, strutils, heapqueue, lists, options, nativesockets, net,
             deques]
 import stew/results
 
-import ./timer
+import ./timer, ./osdefs
 
 export Port, SocketFlag
 export timer, results
@@ -175,7 +175,7 @@ const unixPlatform = defined(macosx) or defined(freebsd) or
                      defined(solaris)
 
 when defined(windows):
-  import winlean, sets, hashes
+  import sets, hashes
 elif unixPlatform:
   import ./selectors2
   from posix import EINTR, EAGAIN, EINPROGRESS, EWOULDBLOCK, MSG_PEEK,
@@ -299,20 +299,12 @@ proc raiseAsDefect*(exc: ref Exception, msg: string) {.
 
 when defined(windows):
   type
-    WSAPROC_TRANSMITFILE = proc(hSocket: SocketHandle, hFile: Handle,
-                                nNumberOfBytesToWrite: DWORD,
-                                nNumberOfBytesPerSend: DWORD,
-                                lpOverlapped: POVERLAPPED,
-                                lpTransmitBuffers: pointer,
-                                dwReserved: DWORD): cint {.
-                                gcsafe, stdcall, raises: [].}
-
     CompletionKey = ULONG_PTR
 
     CompletionData* = object
       cb*: CallbackFunc
       errCode*: OSErrorCode
-      bytesCount*: int32
+      bytesCount*: uint32
       cell*: ForeignCell # we need this `cell` to protect our `cb` environment,
                          # when using `RegisterWaitForSingleObject()`, because
                          # waiting is done in different thread.
@@ -322,7 +314,7 @@ when defined(windows):
       data*: CompletionData
 
     PDispatcher* = ref object of PDispatcherBase
-      ioPort: Handle
+      ioPort: HANDLE
       handles: HashSet[AsyncFD]
       connectEx*: WSAPROC_CONNECTEX
       acceptEx*: WSAPROC_ACCEPTEX
@@ -338,27 +330,21 @@ when defined(windows):
   proc hash(x: AsyncFD): Hash {.borrow.}
   proc `==`*(x: AsyncFD, y: AsyncFD): bool {.borrow, gcsafe.}
 
-  proc getFunc(s: SocketHandle, fun: var pointer, guid: var GUID): bool =
+  proc getFunc(s: SocketHandle, fun: var pointer, guid: GUID): bool =
     var bytesRet: DWORD
     fun = nil
-    result = WSAIoctl(s, SIO_GET_EXTENSION_FUNCTION_POINTER, addr guid,
+    result = wsaIoctl(s, SIO_GET_EXTENSION_FUNCTION_POINTER, unsafeAddr guid,
                       sizeof(GUID).DWORD, addr fun, sizeof(pointer).DWORD,
                       addr bytesRet, nil, nil) == 0
 
   proc globalInit() {.raises: [Defect, OSError].} =
     var wsa: WSAData
-    if wsaStartup(0x0202'i16, addr wsa) != 0:
+    if wsaStartup(0x0202'u16, addr wsa) != 0:
       raiseOSError(osLastError())
 
   proc initAPI(loop: PDispatcher) {.raises: [Defect, CatchableError].} =
-    var
-      WSAID_TRANSMITFILE = GUID(
-        D1: 0xb5367df0'i32, D2: 0xcbac'i16, D3: 0x11cf'i16,
-        D4: [0x95'i8, 0xca'i8, 0x00'i8, 0x80'i8,
-             0x5f'i8, 0x48'i8, 0xa1'i8, 0x92'i8])
-
-    let sock = winlean.socket(winlean.AF_INET, 1, 6)
-    if sock == INVALID_SOCKET:
+    let sock = socket(osdefs.AF_INET, 1, 6)
+    if sock == osdefs.INVALID_SOCKET:
       raiseOSError(osLastError())
 
     var funcPointer: pointer = nil
@@ -387,7 +373,8 @@ when defined(windows):
   proc newDispatcher*(): PDispatcher {.raises: [Defect, CatchableError].} =
     ## Creates a new Dispatcher instance.
     var res = PDispatcher()
-    res.ioPort = createIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 1)
+    res.ioPort = createIoCompletionPort(osdefs.INVALID_HANDLE_VALUE,
+                                        HANDLE(0), 0, 1)
     when declared(initHashSet):
       # After 0.20.0 Nim's stdlib version
       res.handles = initHashSet[AsyncFD]()
@@ -411,7 +398,7 @@ when defined(windows):
   proc setThreadDispatcher*(disp: PDispatcher) {.gcsafe, raises: [Defect].}
   proc getThreadDispatcher*(): PDispatcher {.gcsafe, raises: [Defect].}
 
-  proc getIoHandler*(disp: PDispatcher): Handle =
+  proc getIoHandler*(disp: PDispatcher): HANDLE =
     ## Returns the underlying IO Completion Port handle (Windows) or selector
     ## (Unix) for the specified dispatcher.
     return disp.ioPort
@@ -419,8 +406,8 @@ when defined(windows):
   proc register*(fd: AsyncFD) {.raises: [Defect, CatchableError].} =
     ## Register file descriptor ``fd`` in thread's dispatcher.
     let loop = getThreadDispatcher()
-    if createIoCompletionPort(fd.Handle, loop.ioPort,
-                              cast[CompletionKey](fd), 1) == 0:
+    if createIoCompletionPort(HANDLE(fd), loop.ioPort, cast[CompletionKey](fd),
+                              1) == osdefs.INVALID_HANDLE_VALUE:
       raiseOSError(osLastError())
     loop.handles.incl(fd)
 
@@ -428,8 +415,8 @@ when defined(windows):
        raises: [Defect].} =
     ## Register file descriptor ``fd`` in thread's dispatcher.
     let loop = getThreadDispatcher()
-    if createIoCompletionPort(fd.Handle, loop.ioPort,
-                              cast[CompletionKey](fd), 1) == 0:
+    if createIoCompletionPort(HANDLE(fd), loop.ioPort, cast[CompletionKey](fd),
+                              1) == osdefs.INVALID_HANDLE_VALUE:
       return err(osLastError())
     loop.handles.incl(fd)
     ok()
@@ -477,7 +464,7 @@ when defined(windows):
                                 udata: cast[pointer](customOverlapped))
         loop.callbacks.addLast(acb)
       else:
-        if int32(errCode) != WAIT_TIMEOUT:
+        if DWORD(errCode) != WAIT_TIMEOUT:
           raiseOSError(errCode)
         else:
           noNetworkEvents = true
@@ -507,7 +494,7 @@ when defined(windows):
     ## Closes a (pipe/file) handle and ensures that it is unregistered.
     let loop = getThreadDispatcher()
     loop.handles.excl(fd)
-    discard closeHandle(Handle(fd))
+    discard closeHandle(HANDLE(fd))
     if not isNil(aftercb):
       var acb = AsyncCallback(function: aftercb)
       loop.callbacks.addLast(acb)

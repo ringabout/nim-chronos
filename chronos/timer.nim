@@ -22,6 +22,7 @@
 ## This clock is slower then ``system`` clock.
 ##
 ## You can specify which timer you want to use ``-d:asyncTimer=<system/mono>``.
+import ./osdefs
 const asyncTimer* {.strdefine.} = "mono"
 
 when (NimMajor, NimMinor) < (1, 4):
@@ -31,8 +32,6 @@ else:
 
 when defined(windows):
   when asyncTimer == "system":
-    from winlean import getSystemTimeAsFileTime, FILETIME
-
     proc fastEpochTime*(): uint64 {.
          inline, deprecated: "Use Moment.now()".} =
       ## Timer resolution is millisecond.
@@ -49,11 +48,6 @@ when defined(windows):
                  cast[uint64](t.dwLowDateTime)) * 100
 
   else:
-    proc QueryPerformanceCounter*(res: var uint64) {.
-      importc: "QueryPerformanceCounter", stdcall, dynlib: "kernel32".}
-    proc QueryPerformanceFrequency(res: var uint64) {.
-      importc: "QueryPerformanceFrequency", stdcall, dynlib: "kernel32".}
-
     var queryFrequencyM: uint64
     var queryFrequencyN: uint64
 
@@ -82,13 +76,7 @@ when defined(windows):
     setupQueryFrequence()
 
 elif defined(macosx):
-
   when asyncTimer == "system":
-    from posix import Timeval
-
-    proc posix_gettimeofday(tp: var Timeval, unused: pointer = nil) {.
-      importc: "gettimeofday", header: "<sys/time.h>".}
-
     proc fastEpochTime*(): uint64 {.
          inline, deprecated: "Use Moment.now()".} =
       ## Procedure's resolution is millisecond.
@@ -104,16 +92,6 @@ elif defined(macosx):
       result = (cast[uint64](t.tv_sec) * 1_000_000_000 +
                 cast[uint64](t.tv_usec) * 1_000)
   else:
-    type
-      MachTimebaseInfo {.importc: "struct mach_timebase_info",
-                          header: "<mach/mach_time.h>", pure, final.} = object
-        numer: uint32
-        denom: uint32
-
-    proc mach_timebase_info(info: var MachTimebaseInfo) {.importc,
-         header: "<mach/mach_time.h>".}
-    proc mach_absolute_time(): uint64 {.importc, header: "<mach/mach_time.h>".}
-
     var queryFrequencyN: uint64
     var queryFrequencyD: uint64
 
@@ -136,8 +114,6 @@ elif defined(macosx):
     setupQueryFrequence()
 
 elif defined(posix):
-  from posix import clock_gettime, Timespec, CLOCK_REALTIME, CLOCK_MONOTONIC
-
   when asyncTimer == "system":
     proc fastEpochTime*(): uint64 {.
          inline, deprecated: "Use Moment.now()".} =
