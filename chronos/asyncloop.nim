@@ -792,7 +792,7 @@ elif unixPlatform:
         except CatchableError as exc:
           raiseAsDefect(exc, "unregister failed")
 
-        close(SocketHandle(fd))
+        discard osdefs.close(SocketHandle(fd))
       if not isNil(aftercb):
         aftercb(nil)
 
