@@ -518,12 +518,10 @@ when defined(windows):
     system.dispose(wh.ovl.data.cell)
     GC_unref(wh.ovl)
     deallocShared(cast[pointer](wh))
-    unregister(handleFd)
 
     if unregisterWait(waitFd) == 0:
       let res = osLastError()
-      if int32(res) != ERROR_IO_PENDING:
-        discard closeHandle(HANDLE(handleFd))
+      if res != ERROR_IO_PENDING:
         return err(res)
     ok()
 
@@ -536,7 +534,7 @@ when defined(windows):
     let
       loop = getThreadDispatcher()
       hProcess = openProcess(SYNCHRONIZE, WINBOOL(0), DWORD(pid))
-      flags = DWORD(WT_EXECUTEINWAITTHREAD) or DWORD(WT_EXECUTEONLYONCE)
+      flags = WT_EXECUTEINWAITTHREAD or WT_EXECUTEONLYONCE
 
     var wh: WaitableHandle = nil
 
@@ -1342,7 +1340,7 @@ when defined(windows):
     ## Wait for Windows' handle in asynchronous way.
     let
       loop = getThreadDispatcher()
-      flags = DWORD(WT_EXECUTEINWAITTHREAD) or DWORD(WT_EXECUTEONLYONCE)
+      flags = WT_EXECUTEONLYONCE
 
     var
       retFuture = newFuture[WaitableResult]("chronos.waitForSingleObject()")
