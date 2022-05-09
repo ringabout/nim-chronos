@@ -54,19 +54,19 @@ when defined(windows):
     proc fastEpochTimeNano(): uint64 {.inline.} =
       ## Procedure's resolution is nanosecond.
       var res: uint64
-      QueryPerformanceCounter(res)
+      queryPerformanceCounter(res)
       result = res * queryFrequencyN
 
     proc fastEpochTime*(): uint64 {.
          inline, deprecated: "Use Moment.now()".} =
       ## Procedure's resolution is millisecond.
       var res: uint64
-      QueryPerformanceCounter(res)
+      queryPerformanceCounter(res)
       result = res div queryFrequencyM
 
     proc setupQueryFrequence() =
       var freq: uint64
-      QueryPerformanceFrequency(freq)
+      queryPerformanceFrequency(freq)
       if freq < 1000:
         queryFrequencyM = freq
       else:
