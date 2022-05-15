@@ -13,7 +13,7 @@ else:
   {.push raises: [].}
 
 import std/os
-import "."/[asyncloop, osdefs]
+import "."/[asyncloop, osdefs, osutils]
 import stew/results
 from nativesockets import Domain, Protocol, SockType, toInt
 export Domain, Protocol, SockType, results
