@@ -42,7 +42,9 @@ proc processBody(node, retFutureSym: NimNode,
     # skip all the nested procedure definitions
     return node
   of nnkTryStmt:
-    var cancelledHandled = false
+    var
+      cancelledHandled = false
+      wouldBeCaught = false
     for tryBranch in 1 ..< node.len:
       for child in node[tryBranch]:
         case child.kind:
@@ -50,30 +52,17 @@ proc processBody(node, retFutureSym: NimNode,
         of nnkInfix:
           if child[1] == ident"CancelledError":
             cancelledHandled = true
-            break
+          if child[1] == ident"CatchableError":
+            wouldBeCaught = true
         of nnkIdent:
           if child == ident"CancelledError":
             cancelledHandled = true
-            break
+          if child == ident"CatchableError":
+            wouldBeCaught = true
         else: discard
     
-    if not cancelledHandled:
-      result = newNimNode(nnkTryStmt, node)
-      result.add(node[0])
-      result.add(nnkExceptBranch.newTree(
-        nnkInfix.newTree(
-          ident"as",
-          ident"CancelledError",
-          ident"exc"
-        ),
-        nnkStmtList.newTree(
-          nnkRaiseStmt.newTree(
-            ident"exc"
-          )
-        )
-      ))
-      for tryBranch in 1 ..< node.len:
-        result.add(node[tryBranch])
+    if not cancelledHandled and wouldBeCaught:
+      warning("Cancellation not handled")
 
   else: discard
 
