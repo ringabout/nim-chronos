@@ -76,6 +76,20 @@ proc testAwaitne(): Future[bool] {.async.} =
 
   return true
 
+proc resultOk(): Future[Result[int, string]] {.async.} =
+  return ok(42)
+
+proc resultErr(): Future[Result[int, string]] {.async.} =
+  return err("string")
+
+proc testResult: Future[Result[int, string]] {.async.} =
+  let
+    x = ? await resultOk()
+
+  if x == 42:
+    let _ = ? await resultErr()
+  return err("not this one")
+
 suite "Macro transformations test suite":
   test "`await` command test":
     check waitFor(testAwait()) == true
@@ -104,3 +118,6 @@ suite "Macro transformations test suite":
 
     macroAsync2(testMacro2, seq, Opt, Result, OpenObject, cstring)
     check waitFor(testMacro2()).len == 0
+
+  test "question mark":
+    check waitFor(testResult()).error() == "string"

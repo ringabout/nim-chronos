@@ -7,7 +7,12 @@
 #    distribution, for details about the copyright.
 #
 
-import std/[macros]
+import
+  std/[macros],
+  stew/results
+
+export
+  results
 
 proc skipUntilStmtList(node: NimNode): NimNode {.compileTime.} =
   # Skips a nest of StmtList's.
@@ -17,7 +22,6 @@ proc skipUntilStmtList(node: NimNode): NimNode {.compileTime.} =
 
 proc processBody(node, retFutureSym: NimNode,
                  subTypeIsVoid: bool): NimNode {.compileTime.} =
-  #echo(node.treeRepr)
   result = node
   case node.kind
   of nnkReturnStmt:
@@ -137,6 +141,11 @@ proc asyncSingleProc(prc: NimNode): NimNode {.compileTime.} =
     # fix #13899, `defer` should not escape its original scope
     procBody = newStmtList(newTree(nnkBlockStmt, newEmptyNode(), procBody))
 
+    # Support `let x = ? await ...`
+    procBody.insert 0, quote do:
+      template assignResult(v: Result) =
+        chronosInternalRetFuture.complete(v)
+
     if not subtypeIsVoid:
       procBody.insert(0, newNimNode(nnkPragma).add(newIdentNode("push"),
         newNimNode(nnkExprColonExpr).add(newNimNode(nnkBracketExpr).add(
@@ -223,7 +232,7 @@ proc asyncSingleProc(prc: NimNode): NimNode {.compileTime.} =
                 newLit(prcName))
       )
     )
- 
+
     # -> resultFuture.closure = iterator
     outerProcBody.add(
        newAssignment(
@@ -316,5 +325,5 @@ macro async*(prc: untyped): untyped =
       result.add asyncSingleProc(oneProc)
   else:
     result = asyncSingleProc(prc)
-  when defined(nimDumpAsync):
+  when true or defined(nimDumpAsync):
     echo repr result
