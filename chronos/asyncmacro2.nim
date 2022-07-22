@@ -325,5 +325,5 @@ macro async*(prc: untyped): untyped =
       result.add asyncSingleProc(oneProc)
   else:
     result = asyncSingleProc(prc)
-  when true or defined(nimDumpAsync):
+  when defined(nimDumpAsync):
     echo repr result
