@@ -8,11 +8,7 @@
 #
 
 import
-  std/[macros],
-  stew/results
-
-export
-  results
+  std/[macros]
 
 proc skipUntilStmtList(node: NimNode): NimNode {.compileTime.} =
   # Skips a nest of StmtList's.
@@ -112,6 +108,9 @@ proc asyncSingleProc(prc: NimNode): NimNode {.compileTime.} =
 
   let subtypeIsVoid = returnType.kind == nnkEmpty or
         (baseType.kind == nnkIdent and returnType[1].eqIdent("void"))
+  let returnTypeIsResult =
+    returnType.kind == nnkBracketExpr and baseType.kind == nnkBracketExpr and
+    (baseType[0].eqIdent("Result") or baseType[0].eqIdent("results.Result"))
 
   var outerProcBody = newNimNode(nnkStmtList, prc.body)
 
@@ -141,10 +140,11 @@ proc asyncSingleProc(prc: NimNode): NimNode {.compileTime.} =
     # fix #13899, `defer` should not escape its original scope
     procBody = newStmtList(newTree(nnkBlockStmt, newEmptyNode(), procBody))
 
-    # Support `let x = ? await ...`
-    procBody.insert 0, quote do:
-      template assignResult(v: Result) =
-        chronosInternalRetFuture.complete(v)
+    if returnTypeIsResult:
+      # Support `let x = ? await ...`, but only if `Result` exists as a symbol
+      procBody.insert 0, quote do:
+        template assignResult(v: Result) =
+          chronosInternalRetFuture.complete(v)
 
     if not subtypeIsVoid:
       procBody.insert(0, newNimNode(nnkPragma).add(newIdentNode("push"),
