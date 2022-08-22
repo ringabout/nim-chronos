@@ -1323,10 +1323,13 @@ proc execCommand*(command: string,
 
 proc execCommandEx*(command: string,
                     options = {AsyncProcessOption.EvalCommand},
+                    arguments: seq[string] = @[],
                     timeout = InfiniteDuration
                    ): Future[CommandExResponse] {.async.} =
   let
-    process = await startProcess(command, options = options,
+    process = await startProcess(command,
+                                 options = options,
+                                 arguments = arguments,
                                  stdoutHandle = AsyncProcess.Pipe,
                                  stderrHandle = AsyncProcess.Pipe)
     outputReader = process.stdoutStream.read()
