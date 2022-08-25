@@ -13,7 +13,13 @@ requires "nim > 1.2.0",
          "httputils",
          "unittest2"
 
-var commandStart = "nim c -r --hints:off --verbosity:0 --skipParentCfg:on --warning[ObservableStores]:off --styleCheck:usages --styleCheck:error"
+const styleCheckStyle =
+  if (NimMajor, NimMinor) < (1, 6):
+    "hint"
+  else:
+    "error"
+
+var commandStart = "nim c -r --hints:off --verbosity:0 --skipParentCfg:on --warning[ObservableStores]:off --styleCheck:usages --styleCheck:" & styleCheckStyle
 
 task test, "Run all tests":
   var commands = @[
