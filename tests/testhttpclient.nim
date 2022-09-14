@@ -698,7 +698,7 @@ suite "HTTP client testing suite":
        ("Your browser made it!" in bytesToString(resp.data)):
       return true
     else:
-      echo "Server returns [", bytesToString(resp.data), "]"
+      echo "Server returns ", resp.status, ":[", bytesToString(resp.data), "]"
       return false
 
   test "HTTP all request methods test":
