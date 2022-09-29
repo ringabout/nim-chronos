@@ -1040,6 +1040,7 @@ elif defined(windows):
       return retFuture
 
     proc continuationSocket(udata: pointer) {.gcsafe.} =
+      echo "Accept continuation"
       var ovl = cast[PtrCustomOverlapped](udata)
       var server = cast[StreamServer](ovl.data.udata)
 
