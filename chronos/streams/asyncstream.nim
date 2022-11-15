@@ -234,7 +234,7 @@ proc raiseEmptyMessageDefect*() {.noinline, noreturn.} =
                      "Could not write empty message")
 
 template checkStreamClosed*(t: untyped) =
-  if t.state == AsyncStreamState.Closed:
+  if t.state == AsyncStreamState.Closed or t.state == AsyncStreamState.Finished:
     raiseAsyncStreamUseClosedError()
 
 proc atEof*(rstream: AsyncStreamReader): bool =
