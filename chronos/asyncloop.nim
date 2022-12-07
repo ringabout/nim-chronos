@@ -1054,8 +1054,6 @@ proc idleAsync*(): Future[void] =
   callIdle(continuation, nil)
   retFuture
 
-proc waitFor*[T](fut: Future[T]): T {.raises: [Defect, CatchableError].}
-
 proc withTimeout*[T](fut: Future[T], timeout: Duration): Future[bool] =
   ## Returns a future which will complete once ``fut`` completes or after
   ## ``timeout`` milliseconds has elapsed.
@@ -1095,9 +1093,10 @@ proc withTimeout*[T](fut: Future[T], timeout: Duration): Future[bool] =
       fut.removeCallback(continuation)
       fut.cancel()
       try:
-        waitFor fut
-      except:
-        discard
+        while not(fut.finished()):
+          poll()
+      except CatchableError as exc:
+        raiseAssert "poll failed " & $exc.msg
 
   if fut.finished():
     retFuture.complete(true)
